@@ -9,7 +9,7 @@ type AppMode = "sentiment" | "coding";
 
 const modeCopy: Record<AppMode, { eyebrow: string; heading: string }> = {
   sentiment: { eyebrow: "Research Analysis", heading: "Evaluate stories and documents with evidence." },
-  coding: { eyebrow: "أستمارة تحليل المضمون", heading: "رمّز مواد جائزة البحرين الكبرى وفق استمارة الدراسة." },
+  coding: { eyebrow: "أستمارة تحليل المضمون", heading: "ترميز مواد جائزة البحرين الكبرى وفق استمارة الدراسة" },
 };
 
 // Sentiment Monitoring tab is temporarily hidden at the user's request — only the coding
@@ -26,7 +26,7 @@ export function AppShell() {
       <section className="topbar">
         <div className="brandHeader">
           <Image className="brandLogo" src="/logo.png" alt="Research Analysis logo" width={2816} height={1536} priority />
-          <div>
+          <div dir={appMode === "coding" ? "rtl" : undefined} className="brandText">
             <p className="eyebrow">{copy.eyebrow}</p>
             <h1>{copy.heading}</h1>
           </div>
