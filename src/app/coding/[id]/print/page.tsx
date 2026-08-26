@@ -48,7 +48,7 @@ export default async function CodingPrintPage({ params }: { params: Promise<{ id
       <PrintButton />
 
       <header className="printHeader">
-        <h1>استمارة تحليل المضمون</h1>
+        <h1>أستمارة تحليل المضمون</h1>
       </header>
 
       <Axis title={T.axis1}>
