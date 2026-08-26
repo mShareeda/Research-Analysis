@@ -340,7 +340,16 @@ export function CodingWorkspace() {
               <div className="codingGrid codingDateFields">
                 <label className="codingField">
                   <span>{T.publicationDate} (اختياري)</span>
-                  <input type="date" value={publicationDateInput} onChange={(event) => setPublicationDateInput(event.target.value)} />
+                  <input
+                    type="date"
+                    value={publicationDateInput}
+                    onChange={(event) => {
+                      const nextDate = event.target.value;
+                      setPublicationDateInput(nextDate);
+                      const pickedYear = nextDate.slice(0, 4);
+                      if (pickedYear) setYearInput(pickedYear);
+                    }}
+                  />
                 </label>
                 <label className="codingField">
                   <span>{T.year} (اختياري)</span>
@@ -588,7 +597,14 @@ function DraftReviewForm({
           />
           <TextField label={T.articleTitle} value={draft.articleTitle} onChange={(v) => onChange({ articleTitle: v })} />
           <TextField label={T.url} value={draft.url ?? ""} onChange={(v) => onChange({ url: v || null })} />
-          <DateField label={T.publicationDate} value={draft.publicationDate ?? ""} onChange={(v) => onChange({ publicationDate: v || null })} />
+          <DateField
+            label={T.publicationDate}
+            value={draft.publicationDate ?? ""}
+            onChange={(v) => {
+              const pickedYear = v.slice(0, 4);
+              onChange({ publicationDate: v || null, year: pickedYear ? Number(pickedYear) : draft.year });
+            }}
+          />
           <NumberField label={T.year} value={draft.year} onChange={(v) => onChange({ year: v })} min={2021} max={2025} />
           <SelectField
             label={T.lifeCycle}
