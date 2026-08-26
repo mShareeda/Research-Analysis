@@ -96,6 +96,10 @@ button:disabled {
   text-align: right;
 }
 
+.topbar h1.codingTitle {
+  font-size: clamp(1.3rem, 2.2vw, 2.1rem);
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);

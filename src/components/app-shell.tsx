@@ -27,8 +27,8 @@ export function AppShell() {
         <div className="brandHeader">
           <Image className="brandLogo" src="/logo.png" alt="Research Analysis logo" width={2816} height={1536} priority />
           <div dir={appMode === "coding" ? "rtl" : undefined} className="brandText">
-            <p className="eyebrow">{copy.eyebrow}</p>
-            <h1>{copy.heading}</h1>
+            {appMode !== "coding" && <p className="eyebrow">{copy.eyebrow}</p>}
+            <h1 className={appMode === "coding" ? "codingTitle" : undefined}>{copy.heading}</h1>
           </div>
         </div>
         {SHOW_MODE_SWITCH && (
