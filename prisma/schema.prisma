@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AnalysisSource {
+  id            String          @id @default(cuid())
+  sourceType    String
+  title         String?
+  url           String?
+  publishedAt   DateTime?
+  fileName      String?
+  filePath      String?
+  mimeType      String?
+  language      String
+  extractedText String
+  createdAt     DateTime        @default(now())
+  result        AnalysisResult?
+}
+
+model AnalysisResult {
+  id             String         @id @default(cuid())
+  sourceId       String         @unique
+  source         AnalysisSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  sentiment      String
+  confidence     Float
+  summary        String
+  analysisJson   Json
+  model          String
+  createdAt      DateTime       @default(now())
+}
+
+model AnalysisBatch {
+  id        String              @id @default(cuid())
+  fileName  String
+  status    String              // RUNNING | DONE
+  createdAt DateTime            @default(now())
+  items     AnalysisBatchItem[]
+}
+
+model AnalysisBatchItem {
+  id        String        @id @default(cuid())
+  batchId   String
+  batch     AnalysisBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  url       String
+  status    String        // PENDING | SUCCESS | FAILED
+  error     String?
+  sourceId  String?
+  createdAt DateTime      @default(now())
+}
+
+// --- F1 Bahrain GP academic content-coding pipeline (Analysis_Guide.md) ---
+// Separate from AnalysisSource/AnalysisResult above: different unit of analysis,
+// different (controlled-vocabulary) schema, different study purpose.
+// Rows are immutable once coded — no edit endpoint — so this is a final AI-coded record.
+
+model CodedArticle {
+  id                 String    @id @default(cuid())
+  articleNumber      Int       @unique // رقم المادة — sequential, assigned at save time
+  coderName          String    // اسم المرمز
+  codingDate         DateTime  // تاريخ الترميز
+  sourceType         String    // URL | CSV | PASTE
+  url                String?
+  articleTitle       String
+  extractedText      String
+  site               String
+  publicationDate    DateTime?
+  year               Int?
+  lifeCycle          String    // Before | During | After (المرحلة الزمنية للتغطية)
+  articleType        String
+  articleTypeOther   String?
+  bahrainInTitle     Boolean
+  bahrainInBody      Boolean
+  headlineMentions   Int
+  bodyMentions       Int
+  totalMentions      Int
+  bahrainCentrality  String
+  overallTone        String
+  toneTowardBahrain  String
+  dominantContext    String
+  dominantNewsFrame  String
+  newsFrameOther     String?
+  centralActor       String
+  centralActorOther  String?
+  dominantImage      String
+  imageOther         String?
+  textExamples       String?   // أمثلة دالة من النص
+  notesAr            String?   // ملاحظات الباحث/المرمز
+  model              String
+  createdAt          DateTime  @default(now())
+}
+
+model CodingBatch {
+  id        String             @id @default(cuid())
+  fileName  String
+  status    String             // RUNNING | DONE
+  createdAt DateTime           @default(now())
+  items     CodingBatchItem[]
+}
+
+model CodingBatchItem {
+  id              String      @id @default(cuid())
+  batchId         String
+  batch           CodingBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  url             String
+  publicationDate DateTime?   // user-supplied via CSV column 2 — never auto-extracted
+  year            Int?        // user-supplied via CSV column 3
+  status          String      // PENDING | SUCCESS | FAILED
+  error           String?
+  articleId       String?
+  createdAt       DateTime    @default(now())
+}
