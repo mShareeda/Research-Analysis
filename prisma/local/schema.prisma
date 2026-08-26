@@ -1,33 +1,30 @@
-// Production schema — MySQL (Hostinger's hosted MySQL). The Node "Web App" hosting this runs
-// on gives every deployment a fresh, isolated build directory with no persistent local disk,
-// so SQLite (a local file) can't survive between the build step and the app actually serving
-// traffic. Local development still uses SQLite — see prisma/local/schema.prisma — since it
-// doesn't have that constraint and needs no separate database server.
+// Local development only — SQLite, no server needed. Production (Hostinger) uses MySQL;
+// see ../schema.prisma and DEPLOY.md for why. Keep both schemas' models in sync by hand when
+// making changes — there's no automated cross-check between them.
 //
-// String fields that can hold more than ~191 characters (MySQL's default VARCHAR length under
-// Prisma) are annotated @db.Text/@db.LongText so long article bodies, summaries, and error
-// messages aren't truncated or rejected.
+// Usage: npm run prisma:generate:local / npm run prisma:migrate:local (see package.json),
+// both pass --schema=prisma/local/schema.prisma so they never touch the MySQL migration history.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model AnalysisSource {
   id            String          @id @default(cuid())
   sourceType    String
-  title         String?         @db.Text
-  url           String?         @db.Text
+  title         String?
+  url           String?
   publishedAt   DateTime?
   fileName      String?
   filePath      String?
   mimeType      String?
   language      String
-  extractedText String          @db.LongText
+  extractedText String
   createdAt     DateTime        @default(now())
   result        AnalysisResult?
 }
@@ -38,7 +35,7 @@ model AnalysisResult {
   source         AnalysisSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   sentiment      String
   confidence     Float
-  summary        String         @db.Text
+  summary        String
   analysisJson   Json
   model          String
   createdAt      DateTime       @default(now())
@@ -56,17 +53,17 @@ model AnalysisBatchItem {
   id        String        @id @default(cuid())
   batchId   String
   batch     AnalysisBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  url       String        @db.Text
+  url       String
   status    String        // PENDING | SUCCESS | FAILED
-  error     String?       @db.Text
+  error     String?
   sourceId  String?
   createdAt DateTime      @default(now())
 }
 
-// --- F1 Bahrain GP academic content-coding pipeline (استمارة تحليل المضمون) ---
+// --- F1 Bahrain GP academic content-coding pipeline (Analysis_Guide.md) ---
 // Separate from AnalysisSource/AnalysisResult above: different unit of analysis,
 // different (controlled-vocabulary) schema, different study purpose.
-// Rows are immutable once saved — no edit endpoint — so this is a final, coder-reviewed record.
+// Rows are immutable once coded — no edit endpoint — so this is a final AI-coded record.
 
 model CodedArticle {
   id                 String    @id @default(cuid())
@@ -74,9 +71,9 @@ model CodedArticle {
   coderName          String    // اسم المرمز
   codingDate         DateTime  // تاريخ الترميز
   sourceType         String    // URL | CSV | PASTE
-  url                String?   @db.Text
-  articleTitle       String    @db.Text
-  extractedText      String    @db.LongText
+  url                String?
+  articleTitle       String
+  extractedText      String
   site               String
   publicationDate    DateTime?
   year               Int?
@@ -98,8 +95,8 @@ model CodedArticle {
   centralActorOther  String?
   dominantImage      String
   imageOther         String?
-  textExamples       String?   @db.Text // أمثلة دالة من النص
-  notesAr            String?   @db.Text // ملاحظات الباحث/المرمز
+  textExamples       String?   // أمثلة دالة من النص
+  notesAr            String?   // ملاحظات الباحث/المرمز
   model              String
   createdAt          DateTime  @default(now())
 }
@@ -116,11 +113,11 @@ model CodingBatchItem {
   id              String      @id @default(cuid())
   batchId         String
   batch           CodingBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  url             String      @db.Text
+  url             String
   publicationDate DateTime?   // user-supplied via CSV column 2 — never auto-extracted
   year            Int?        // user-supplied via CSV column 3
   status          String      // PENDING | SUCCESS | FAILED
-  error           String?     @db.Text
+  error           String?
   articleId       String?
   createdAt       DateTime    @default(now())
 }

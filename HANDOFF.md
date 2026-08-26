@@ -50,7 +50,8 @@ http://localhost:3000
 - `src/app/api/batches/route.ts` — POST: parse CSV, create `AnalysisBatch` + items, kick off background processing via `after()`
 - `src/app/api/batches/[id]/route.ts` — GET: batch status + per-item results, polled by the UI
 - `src/app/api/batches/[id]/retry/route.ts` — POST: resets FAILED items back to PENDING and re-runs the batch
-- `prisma/schema.prisma` — SQLite Prisma models
+- `prisma/schema.prisma` — production Prisma models (MySQL)
+- `prisma/local/schema.prisma` — local dev Prisma models (SQLite), kept in sync by hand with the file above
 - `.env` — `DATABASE_URL="file:./dev.db"`
 - `.env.local` — runtime provider keys/config (git-ignored)
 - `README.md` — local setup instructions
@@ -74,10 +75,21 @@ http://localhost:3000
 
 ## Runtime Configuration
 
-SQLite database:
+Database — **two separate schemas, deliberately**: `prisma/schema.prisma` (MySQL) is what
+production (Hostinger's "Web Apps" hosting) uses; `prisma/local/schema.prisma` (SQLite) is what
+local dev uses. They're not interchangeable — see "Why MySQL in production" in `DEPLOY.md` for
+the full reasoning (short version: that hosting product gives every deploy a fresh, isolated,
+non-persistent build directory, so a SQLite file can't survive between the build step and the
+app serving traffic). Keep both schemas' models in sync by hand when the data model changes.
 
 ```bash
-DATABASE_URL="file:./dev.db"
+# .env.local, local dev — resolves relative to prisma/local/schema.prisma's directory
+DATABASE_URL="file:./dev.db"   # → prisma/local/dev.db
+```
+
+```bash
+# Hostinger's Environment Variables panel, production
+DATABASE_URL="mysql://<user>:<password>@localhost:3306/<database>"
 ```
 
 OpenRouter is the default provider:
@@ -108,12 +120,17 @@ npm run build
 npm test
 ```
 
-Prisma:
+Prisma — local (SQLite):
 
 ```bash
-npm run prisma:generate   # regenerate client after schema changes
-npm run prisma:migrate -- --name <name>   # apply schema changes
+npm run prisma:generate:local   # regenerate client after schema changes
+npm run prisma:migrate:local -- --name <name>   # apply schema changes
 ```
+
+Prisma — production schema (MySQL, `prisma/schema.prisma`, no `:local` suffix) needs a
+reachable MySQL connection to run `migrate dev` interactively, which isn't available from this
+machine — see "If a future schema change needs a new migration" in `DEPLOY.md` for the offline
+workaround.
 
 ## Analysis Logic
 
@@ -225,6 +242,12 @@ The 5 محاور, all in `src/lib/coding-schemas.ts` (enums) and `src/lib/coding
 - `openrouter/auto` (the default model) can take 20–40s per article depending on which underlying model it routes to — this is normal, not a hang; if debugging, check `preview_logs`/network requests before assuming something's broken.
 
 ## Schema
+
+Same models in both `prisma/schema.prisma` (MySQL) and `prisma/local/schema.prisma` (SQLite) —
+shown once below. The MySQL version additionally annotates long free-text fields
+(`extractedText`, `summary`, `url`, `error`, `articleTitle`, `textExamples`, `notesAr`, etc.)
+with `@db.Text`/`@db.LongText`, since MySQL's default `VARCHAR(191)` would truncate/reject them;
+SQLite has no such limit so its copy needs no annotations.
 
 ```prisma
 model AnalysisSource {
@@ -489,17 +512,17 @@ The F1 GP Study Coding pipeline's draft → review → save flow was manually sm
 ## Resume Checklist
 
 1. Read this file.
-2. Start dev server: `npm run dev`
-3. If Prisma client looks stale: `npm run prisma:generate`
-4. If database is missing: `npm run prisma:migrate -- --name init`
-5. Verify: `npm run typecheck && npm run lint && npm test`
+2. Start dev server: `npm run dev` (this already runs `prisma generate --schema=prisma/local/schema.prisma` first)
+3. If the local SQLite database is missing: `npm run prisma:migrate:local -- --name init`
+4. Verify: `npm run typecheck && npm run lint && npm test`
 
 ## Known Notes
 
 - `logo.png` exists at project root and as `public/logo.png`; app uses `public/logo.png`
 - `.env.local` contains the OpenRouter key — keep private
 - `uploads/` is git-ignored
-- `prisma/dev.db` is the local database file
+- `prisma/local/dev.db` is the local database file (git-ignored) — production uses MySQL instead, see "Runtime Configuration" and `DEPLOY.md`
+- Production's `CodedArticle` table (MySQL) started empty as of the 2026-08-26 SQLite→MySQL migration — no data was carried over (there was none on the live site yet). The researcher's local SQLite data (`prisma/local/dev.db`) is untouched and separate.
 - Scanned PDF OCR is not implemented
 - `publishedAt` column exists in DB and is still extracted and saved, but not shown in UI
 - The `allowedDevOrigins: ["10.2.3.44"]` in `next.config.ts` allows access from the local network device at that IP

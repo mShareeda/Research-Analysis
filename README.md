@@ -2,7 +2,7 @@
 
 Personal research analysis app for URLs, pasted text, PDFs, DOCX, TXT, and Markdown files.
 
-The app extracts readable content, sends it to OpenRouter or OpenAI for structured sentiment analysis, and saves the source plus report in a local SQLite database.
+The app extracts readable content, sends it to OpenRouter or OpenAI for structured sentiment analysis, and saves the source plus report in a database — SQLite locally, MySQL in production (see "Database" below for why).
 
 ## Setup
 
@@ -25,7 +25,7 @@ The app extracts readable content, sends it to OpenRouter or OpenAI for structur
 3. Create the local SQLite database:
 
    ```bash
-   npm run prisma:migrate -- --name init
+   npm run prisma:migrate:local -- --name init
    ```
 
 4. Start the app:
@@ -35,6 +35,19 @@ The app extracts readable content, sends it to OpenRouter or OpenAI for structur
    ```
 
 Open `http://localhost:3000`.
+
+## Database
+
+Local development uses SQLite (`prisma/local/schema.prisma`, `prisma/local/dev.db`) — no server
+needed. Production (Hostinger) uses MySQL (`prisma/schema.prisma`) instead, because that hosting
+product gives every deploy a fresh, isolated build directory with no persistent local disk, so a
+SQLite file can't survive between the build step and the app actually serving traffic. See
+`DEPLOY.md` for the full explanation.
+
+Keep both schemas' models in sync by hand when changing the data model — there's no automated
+cross-check between them. Local commands (`prisma:generate:local`/`prisma:migrate:local`) always
+pass `--schema=prisma/local/schema.prisma` so they never touch the MySQL migration history in
+`prisma/migrations/`.
 
 ## Supported Inputs
 

@@ -1,8 +1,9 @@
 # Deploying to Hostinger
 
-This app is a standard Node.js Next.js app with a local SQLite database (via Prisma). It is
-**not** deployable to plain shared/PHP hosting — it needs a plan that runs a persistent Node.js
-process.
+This app is a standard Node.js Next.js app backed by Prisma. Locally it uses SQLite; in
+production (on the hosting product this project actually uses) it uses MySQL — see "Why MySQL
+in production" below before assuming SQLite would just work. It is **not** deployable to plain
+shared/PHP hosting — it needs a plan that runs a persistent Node.js process.
 
 There are two different Hostinger products this can run on. **Check which one you actually
 have before following either section** — they work completely differently.
@@ -21,33 +22,63 @@ Instead, everything is driven by:
   **Deployments** in the sidebar for build logs and history).
 - **`package.json`'s `build` script** — this is exactly what Hostinger runs (install command:
   `npm install`, build command: whatever `scripts.build` is, currently
-  `prisma generate && prisma migrate deploy && next build`). Since there's no way to run a
-  one-off command against the live app, **any setup step that needs to happen on deploy must
-  live in this build script** — that's why `prisma migrate deploy` is baked in here instead of
-  being a separate manual step. It's idempotent (a no-op if nothing's pending), so it's safe to
-  leave in permanently.
+  `prisma generate && prisma migrate deploy && next build`, which uses the default schema path
+  `prisma/schema.prisma` — the MySQL one). Since there's no way to run a one-off command
+  against the live app, **any setup step that needs to happen on deploy must live in this build
+  script** — that's why `prisma migrate deploy` is baked in here instead of being a separate
+  manual step. It's idempotent (a no-op if nothing's pending), so it's safe to leave in
+  permanently.
 - **Environment variables panel** (sidebar → **Environment variables**) — set `DATABASE_URL`,
   `AI_PROVIDER`, `OPENROUTER_API_KEY`, etc. here (or via its "Import .env" button). These are
   injected as real process env vars for both the build and the running app — no `.env`/
   `.env.local` files needed or used on this hosting type.
 
-**To deploy a change**: just `git push origin main` (as covered elsewhere in this session) —
-that's it. Watch **Deployments** in hPanel for the build log if something goes wrong.
+**To deploy a change**: just `git push origin main` — that's it. Watch **Deployments** in
+hPanel for the build log if something goes wrong.
 
-**If a future schema change needs a new migration**: run `npx prisma migrate dev --name X`
-locally (as usual), commit the new file under `prisma/migrations/`, and push — the build
-script's `prisma migrate deploy` picks it up automatically on that deploy.
+**If a future schema change needs a new migration**: since there's no reachable local MySQL to
+run `prisma migrate dev` against, generate the migration SQL offline instead:
 
-**Database persistence**: SQLite lives at `DATABASE_URL` (`file:./dev.db`, resolved relative to
-`prisma/schema.prisma` → `prisma/dev.db`) on whatever persistent storage this Web App's
-container mounts. Back this file up periodically (via hPanel's File Manager or a scheduled
-export of the coding data — see `GET /api/coding/export` for a CSV of the research dataset)
-since there's no separate managed database service here to fall back on.
+```bash
+npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > /dev/null   # sanity-check it still runs
+mkdir -p prisma/migrations/$(date +%Y%m%d%H%M%S)_your_change_name
+npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --script --shadow-database-url "$DATABASE_URL" > prisma/migrations/<the_folder_above>/migration.sql
+```
+
+(The `--from-migrations`/`--shadow-database-url` variant needs a reachable MySQL — easiest to
+run this from within the SSH account after temporarily allowlisting your IP under **Remote
+MySQL**, or just hand-write the `ALTER TABLE` SQL for a small change.) Commit the new migration
+folder and push — the build script's `prisma migrate deploy` applies it on that deploy.
+
+## Why MySQL in production
+
+This Web App gives **every deployment its own fresh, isolated build directory**
+(`~/domains/<site>/hbuilds/versions/<uuid>/`) — confirmed by inspecting the account's file
+listing (only `hbuilds`, `public_html`, and a file literally named `DO_NOT_UPLOAD_HERE` exist
+at the account root; nothing meant as persistent app storage). A SQLite database is just a
+local file — even though `prisma migrate deploy` successfully creates and migrates it during
+the build, that file does not survive into whatever actually serves live traffic afterward: the
+runtime logs showed the exact same "table does not exist" error immediately after a build that
+had just proven the table existed. There is no persistent volume to point SQLite at on this
+product. MySQL (Hostinger's own hosted MySQL, created via hPanel → **Databases → Management**)
+is the fix — a real external database the app connects to over the network, unaffected by the
+build directory being thrown away and recreated on every deploy.
+
+**Connection string**: `mysql://<user>:<password>@localhost:3306/<database>` — try `localhost`
+first (the Web App and MySQL server are on the same underlying host). If that gets a connection
+error in the runtime logs, switch the host to the value shown on hPanel → **Databases → Remote
+MySQL** (e.g. `srv2196.hstgr.io`) and add the Web App's outbound IP — or `%` for any host, since
+the exact egress IP isn't predictable on this platform — to that page's allowlist.
 
 ## Option B: a plain Hostinger VPS (manual setup)
 
 If you're instead on a VPS with real root SSH access (not the Web Apps product above), you own
-the whole box and set up Node yourself:
+the whole box and set up Node yourself. Unlike Option A, a VPS has genuine persistent disk, so
+SQLite works fine here — use `prisma/local/schema.prisma` (pass `--schema=prisma/local/schema.prisma`
+to every `prisma` command, and replace `npm run build` with
+`npx prisma generate --schema=prisma/local/schema.prisma && npx prisma migrate deploy --schema=prisma/local/schema.prisma && next build`)
+if you'd rather not run a MySQL server. Steps below assume you're keeping the same MySQL setup
+as Option A for consistency, which needs no such overrides.
 
 ### 1. One-time server setup
 
@@ -69,7 +100,7 @@ npm ci
 
 ```bash
 # .env — Prisma CLI specifically only auto-loads this file, not .env.local
-DATABASE_URL="file:./prisma/dev.db"
+DATABASE_URL="mysql://user:password@host:3306/database"
 ```
 
 ```bash
@@ -105,9 +136,10 @@ pm2 startup
 
 Listens on port 3000 by default (`PORT=xxxx` to override).
 
-**Persisting the database and uploads across rebuilds**: keep `prisma/dev.db` and `uploads/` in
-the original `research-analysis/` checkout (not inside `.next/standalone`), and symlink them in
-or point `DATABASE_URL`/`UPLOAD_DIR` at absolute paths outside the build output.
+**Persisting uploads across rebuilds**: keep `uploads/` in the original `research-analysis/`
+checkout (not inside `.next/standalone`), and symlink it in or point `UPLOAD_DIR` at an
+absolute path outside the build output. (The database itself is external — MySQL — so it isn't
+affected by rebuilds the way a SQLite file would be.)
 
 ### 6. Point the subdomain at it
 
