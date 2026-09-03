@@ -36,6 +36,19 @@ Instead, everything is driven by:
 **To deploy a change**: just `git push origin main` — that's it. Watch **Deployments** in
 hPanel for the build log if something goes wrong.
 
+### Password-locking the app
+
+`src/middleware.ts` gates every route behind HTTP Basic Auth, checked against
+the `SITE_PASSWORD` environment variable — set it in hPanel's **Environment
+variables** panel (same place as `DATABASE_URL`), never in a committed file.
+The username is ignored; only the password after the colon is checked, so
+visitors can type anything in the username field. Leaving `SITE_PASSWORD`
+unset (the default) disables the gate entirely — nothing to compare against,
+so a fresh clone or a forgotten env var never accidentally locks everyone
+out. Changing the password later is just updating that one env var and
+redeploying (or on this hosting type, the env var panel may apply without a
+redeploy — check hPanel).
+
 **If a future schema change needs a new migration**: since there's no reachable local MySQL to
 run `prisma migrate dev` against, generate the migration SQL offline instead:
 
