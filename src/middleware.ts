@@ -37,7 +37,13 @@ export function middleware(request: NextRequest) {
 
   return new NextResponse("Authentication required.", {
     status: 401,
-    headers: { "WWW-Authenticate": `Basic realm="${REALM}"` },
+    headers: {
+      "WWW-Authenticate": `Basic realm="${REALM}"`,
+      // Without this, a browser or intermediary that already has a cached
+      // 200 for this URL (e.g. from before SITE_PASSWORD was set) can serve
+      // that stale copy instead of ever reaching this check again.
+      "Cache-Control": "no-store",
+    },
   });
 }
 
